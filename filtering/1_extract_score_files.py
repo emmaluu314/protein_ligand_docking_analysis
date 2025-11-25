@@ -1,13 +1,15 @@
 import user_functions as uf
 import score_functions as sf
+import os
+import pandas as pd
 
 # User defined variables:
 current_username = 'emmaluu'
-remote_server_name = 'cacao.genomecenter.ucdavis.edu'
-main_server_path = '/share/siegellab/emmaluu/docking/' # main location of subfolders
+remote_server_name = 'hive.hpc.ucdavis.edu'
+main_server_path = "/quobyte/jbsiegelgrp/emmaluu/standard_tools/docking/cofactors/NAD_16/LDH/runs/" # main location of subfolders
+main_local_path = '/Users/emluu/Documents/Siegel lab/standard/Rosetta Ligand/LDH/2025_10_30_16NAD_mutants/'
 results_folder_name = "results/" #this is what your results folder is called. If you do not use a results folder, write "".
-main_local_path = '/Users/emluu/Documents/Siegel lab/Rosetta Ligand/'
-target_list_filename = 'master_list.txt' #name of file with a column of the subfolders you'd like to analyze
+target_list_filename = 'jobs.txt' #name of file with a column of the subfolders you'd like to analyze
 target_list_path = main_local_path + target_list_filename
 
 
