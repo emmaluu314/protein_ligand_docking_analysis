@@ -17,5 +17,17 @@ dependencies = [
 
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# This project is a collection of scripts (no importable package directory),
+# so ship the top-level scripts and helper folders explicitly.
+packages = []
+include = [
+    "*.py",
+    "compare_to_reference/**/*",
+    "filtering/**/*",
+    "plotting_functions/**/*",
+    "custom_analyses/**/*",
+]
