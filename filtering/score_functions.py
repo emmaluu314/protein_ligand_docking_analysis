@@ -51,11 +51,37 @@ def compile_score_data_frame(path, docking_flag):
         final_dataframe.loc[:, final_dataframe.columns.str.contains('interf_')], axis=1)
     return final_dataframe
 
-def plot_constraint_distribution(dataframe, cst_columns, threshold, subfolder_path, folder_name):
+def _safe_bins(data, bin_width=None, target_bins=20):
+    """
+    Bin edges that always define at least one real bin.
+
+    np.arange(min, max + w, w) collapses to a single edge (i.e. zero bins) when a
+    column is constant, which makes np.histogram return an empty `counts` array.
+    Guards against that, and picks a bin width from the data when none is given.
+
+    Returns None when there is nothing to plot.
+    """
+    data = np.asarray(data, dtype=float)
+    data = data[np.isfinite(data)]
+    if data.size == 0:
+        return None
+    low, high = float(np.min(data)), float(np.max(data))
+    if bin_width is None or not np.isfinite(bin_width) or bin_width <= 0:
+        span = high - low
+        bin_width = span / target_bins if span > 0 else 1.0
+    if high - low < bin_width:          # constant or near-constant column
+        low, high = low - bin_width / 2.0, high + bin_width / 2.0
+    return np.arange(low, high + bin_width, bin_width)
+
+
+def plot_constraint_distribution(dataframe, cst_columns, threshold, subfolder_path, folder_name,
+                                 bin_width=None):
     """
     Plots histogram and cumulative histogram (as subplots) for all constraint columns.
     """
-    bin_width = 1
+    # bin_width=None -> chosen from the data. Constraint scores live in a much
+    # narrower range than the old hard-coded width of 1, which put every value
+    # in a single bin.
     num_features = len(cst_columns)
 
     # --- Histogram subplots ---
@@ -64,7 +90,10 @@ def plot_constraint_distribution(dataframe, cst_columns, threshold, subfolder_pa
         axes_hist = [axes_hist]
     for ax, feature in zip(axes_hist, cst_columns):
         data = dataframe[feature].dropna().values
-        bins = np.arange(min(data), max(data) + bin_width, bin_width)
+        bins = _safe_bins(data, bin_width)
+        if bins is None:
+            ax.set_title(f"{feature}: no data")
+            continue
         ax.hist(data, bins=bins,color='skyblue',label=f'{feature}')
         ax.axvline(threshold, color='black', linestyle='--', label=f'Threshold ({threshold:.2f})')
         ax.set_title(f"Histogram of {feature}")
@@ -84,10 +113,16 @@ def plot_constraint_distribution(dataframe, cst_columns, threshold, subfolder_pa
         axes_cum = [axes_cum]
     for ax, feature in zip(axes_cum, cst_columns):
         data = dataframe[feature].dropna().values
-        bins = np.arange(min(data), max(data) + bin_width, bin_width)
+        bins = _safe_bins(data, bin_width)
+        if bins is None:
+            ax.set_title(f"{feature}: no data")
+            continue
         counts, bin_edges = np.histogram(data, bins=bins)
-        cumulative = np.cumsum(counts)
-        percent_data = cumulative / cumulative[-1] * 100
+        total = counts.sum()
+        if total == 0:
+            ax.set_title(f"{feature}: no data")
+            continue
+        percent_data = np.cumsum(counts) / total * 100
         x = bin_edges[:-1]
         ax.scatter(x, percent_data, color='skyblue', label=f'{feature} (points)')
         ax.axvline(threshold, color='black', linestyle='--', label=f'Threshold ({threshold:.2f})')
@@ -114,7 +149,7 @@ def scatter_hist(x, y, ax, ax_histx, ax_histy, bins=40):
 
     # Arrow and annotation pointing on the x-axis of scatter plot (below)
     ax.annotate(
-        f"Peak at\n{total_upto_peak/n_x.sum():.2f}",
+        f"Peak at\n{total_upto_peak / n_x.sum():.2f}" if n_x.sum() else "Peak at\nn/a",
         xy=(peak_bin_x, ax.get_ylim()[0]),        # Point at x peak, bottom of y-axis
         xytext=(peak_bin_x, ax.get_ylim()[0] - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.1),  # offset downward
         arrowprops=dict(facecolor='#985d93', shrink=0.05, width=1, headwidth=6),
@@ -128,7 +163,7 @@ def scatter_hist(x, y, ax, ax_histx, ax_histy, bins=40):
 
     # Arrow and annotation pointing on the y-axis of scatter plot (left)
     ax.annotate(
-        f"Peak at\n{1-peak_bin_y/min(y):.2f}",
+        f"Peak at\n{1 - peak_bin_y / min(y):.2f}" if len(y) and min(y) else "Peak at\nn/a",
         xy=(ax.get_xlim()[0], peak_bin_y),        # Point at bottom of x-axis, y peak
         xytext=(ax.get_xlim()[0] - (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.1, peak_bin_y),  # offset leftward
         arrowprops=dict(facecolor='#985d93', shrink=0.05, width=1, headwidth=6),
@@ -180,9 +215,13 @@ def generate_diagnostic_plots(full_df, filtering_features, thresholds, subfolder
     # Cumulative sum for the other two features
     for feature, threshold in zip(filtering_features[1:], thresholds[1:]):
         data = full_df[feature].dropna().values
+        if data.size == 0:
+            continue
         counts, bin_edges = np.histogram(data)
-        cumsum_data = np.cumsum(counts)
-        percent_data = cumsum_data / cumsum_data[-1] * 100
+        total = counts.sum()
+        if total == 0:
+            continue
+        percent_data = np.cumsum(counts) / total * 100
         x = bin_edges[:-1]
         plt.figure(figsize=(8, 5))
         plt.scatter(x, percent_data, color='skyblue', label='Cumulative Sum')
